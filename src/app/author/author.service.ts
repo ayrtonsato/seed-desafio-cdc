@@ -4,6 +4,7 @@ import { DrizzleAsyncProvider } from '@common/drizzle/drizzle.provider';
 import * as schema from '@common/drizzle/schema';
 import { CreateAuthor } from './dtos/create-author.dto';
 import { AuthorEntity } from './entities/author.entity';
+import { UniqueConstraintDbError } from '@common/errors/unique-constraint-db.error';
 
 @Injectable()
 export class AuthorService {
@@ -13,17 +14,24 @@ export class AuthorService {
   ) { }
 
   async create(createAuthor: CreateAuthor) {
-    const author = await this.db
-      .insert(schema.authors)
-      .values({
-        name: createAuthor.name,
-        email: createAuthor.email,
-        description: createAuthor.description,
-      })
-      .returning();
-    if (author.length < 0) {
-      throw new Error('Error when inserting a new author');
+    try {
+      const author = await this.db
+        .insert(schema.authors)
+        .values({
+          name: createAuthor.name,
+          email: createAuthor.email,
+          description: createAuthor.description,
+        })
+        .returning();
+      if (author.length < 0) {
+        throw new Error('Error when inserting a new author');
+      }
+      return new AuthorEntity(author[0]);
+    } catch (e: any) {
+      if (e.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        throw new UniqueConstraintDbError('Email already exists');
+      }
+      throw e;
     }
-    return new AuthorEntity(author[0]);
   }
 }
